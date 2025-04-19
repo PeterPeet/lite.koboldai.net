@@ -3854,6 +3854,656 @@ Current version indicated by LITEVER below.
 		cephide.add(newOption);
 	}
 
+
+// Theme Customizer for KoboldAI Lite
+// Dynamically scans all Style Items and allows saving templates
+class ThemeCustomizer {
+  constructor() {
+    this.colorMap = {}; // Maps CSS property paths to their color values
+    this.defaultColors = {};
+    this.currentTheme = {};
+    this.customizerOpen = false;
+    this.themeKey = 'koboldai_theme';
+  }
+
+  init() {
+    // Extract all colors from stylesheets
+    this.extractAllColors();
+    
+    // Save default theme
+    this.saveDefaultTheme();
+    
+    // Load saved theme if exists
+    this.loadSavedTheme();
+    
+    // Create and add customizer button to UI
+    this.addCustomizerButton();
+  }
+
+  extractAllColors() {
+    // Process all loaded stylesheets
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      try {
+        const sheet = document.styleSheets[i];
+        
+        // Skip cross-origin stylesheets that can't be accessed
+        if (sheet.href && new URL(sheet.href).origin !== window.location.origin) {
+          console.log(`Skipping cross-origin stylesheet: ${sheet.href}`);
+          continue;
+        }
+        
+        this.processStylesheet(sheet);
+      } catch (e) {
+        console.warn(`Could not process stylesheet ${i}:`, e);
+      }
+    }
+    
+    console.log(`Found ${Object.keys(this.colorMap).length} color properties`);
+  }
+  
+  processStylesheet(sheet) {
+    try {
+      const rules = sheet.cssRules || sheet.rules;
+      for (let j = 0; j < rules.length; j++) {
+        const rule = rules[j];
+        
+        // Handle regular style rules
+        if (rule instanceof CSSStyleRule) {
+          this.processStyleRule(rule);
+        }
+        // Handle @media rules
+        else if (rule instanceof CSSMediaRule) {
+          for (let k = 0; k < rule.cssRules.length; k++) {
+            if (rule.cssRules[k] instanceof CSSStyleRule) {
+              this.processStyleRule(rule.cssRules[k], rule.conditionText);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error processing stylesheet:', e);
+    }
+  }
+  
+  processStyleRule(rule, mediaQuery = '') {
+    const selector = rule.selectorText;
+    const style = rule.style;
+    
+    for (let i = 0; i < style.length; i++) {
+      const property = style[i];
+      const value = style.getPropertyValue(property).trim();
+      
+      // Check if property contains a color
+      if (this.isColorProperty(property, value)) {
+        // Create a unique identifier for this color
+        const colorId = this.createColorId(selector, property, mediaQuery);
+        
+        // Save to our color map
+        this.colorMap[colorId] = {
+          selector,
+          property,
+          value,
+          mediaQuery
+        };
+      }
+    }
+  }
+  
+  isColorProperty(property, value) {
+    // Check if the property is explicitly color-related
+    const colorProps = ['color', 'background-color', 'border-color', 'outline-color',
+                        'box-shadow', 'text-shadow', 'fill', 'stroke'];
+    
+    const isColorProp = colorProps.some(prop => property.includes(prop));
+    
+    // Check if value looks like a color
+    const isColorValue = (
+      value.startsWith('#') ||
+      value.startsWith('rgb') ||
+      value.startsWith('hsl') ||
+      value.match(/^[a-z]+$/) // Could be named color like 'red', 'blue', etc.
+    );
+    
+    return isColorProp && isColorValue;
+  }
+  
+  createColorId(selector, property, mediaQuery = '') {
+    // Create a unique identifier for each color
+    // Format: selector__property__mediaQuery
+    let id = `${selector.replace(/\s+/g, '_')}__${property}`;
+    if (mediaQuery) {
+      id += `__${mediaQuery.replace(/\s+/g, '_')}`;
+    }
+    return id;
+  }
+
+  saveDefaultTheme() {
+    this.defaultColors = JSON.parse(JSON.stringify(this.colorMap));
+  }
+
+  loadSavedTheme() {
+    const savedTheme = localStorage.getItem(this.themeKey);
+    if (savedTheme) {
+      try {
+        this.currentTheme = JSON.parse(savedTheme);
+        this.applyTheme(this.currentTheme);
+      } catch (e) {
+        console.error('Error loading saved theme:', e);
+      }
+    }
+  }
+
+  applyTheme(theme) {
+    // Create or update style element
+    let styleElem = document.getElementById('theme-customizer-styles');
+    if (!styleElem) {
+      styleElem = document.createElement('style');
+      styleElem.id = 'theme-customizer-styles';
+      document.head.appendChild(styleElem);
+    }
+    
+    // Build CSS text
+    let cssText = '';
+    
+    // Group by media query for better organization
+    const mediaGroups = {};
+    
+    Object.entries(theme).forEach(([id, colorInfo]) => {
+      if (!colorInfo) return;
+      
+      const { selector, property, value, mediaQuery } = colorInfo;
+      
+      if (mediaQuery) {
+        if (!mediaGroups[mediaQuery]) {
+          mediaGroups[mediaQuery] = [];
+        }
+        mediaGroups[mediaQuery].push(`${selector} { ${property}: ${value}; }`);
+      } else {
+        cssText += `${selector} { ${property}: ${value}; }\n`;
+      }
+    });
+    
+    // Add media queries
+    Object.entries(mediaGroups).forEach(([mediaQuery, rules]) => {
+      cssText += `@media ${mediaQuery} {\n`;
+      rules.forEach(rule => {
+        cssText += `  ${rule}\n`;
+      });
+      cssText += `}\n`;
+    });
+    
+    styleElem.textContent = cssText;
+    this.currentTheme = JSON.parse(JSON.stringify(theme));
+  }
+
+  resetToDefault() {
+    this.applyTheme(this.defaultColors);
+    this.saveCurrentTheme();
+  }
+
+  saveCurrentTheme() {
+    localStorage.setItem(this.themeKey, JSON.stringify(this.currentTheme));
+  }
+
+  addCustomizerButton() {
+    const button = document.createElement('button');
+    button.id = 'theme-customizer-btn';
+    button.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>`;
+    button.title = "Customize Theme Colors";
+    button.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #3498db;
+      color: white;
+      border: none;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      cursor: pointer;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    document.body.appendChild(button);
+    
+    button.addEventListener('click', () => {
+      if (this.customizerOpen) {
+        this.closeCustomizer();
+      } else {
+        this.openCustomizer();
+      }
+    });
+  }
+
+  openCustomizer() {
+    // Create customizer panel
+    const panel = document.createElement('div');
+    panel.id = 'theme-customizer-panel';
+    panel.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 350px;
+      max-height: 80vh;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      padding: 20px;
+      z-index: 10000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #333;
+    `;
+    
+    // Add header
+    panel.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin: 0; font-size: 18px;">Theme Customizer</h2>
+        <button id="close-customizer" style="background: none; border: none; cursor: pointer; font-size: 20px;">×</button>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <input type="text" id="color-search" placeholder="Search colors..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+      <div id="color-controls" style="margin-bottom: 15px;"></div>
+      <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button id="apply-theme" style="background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Apply</button>
+        <button id="reset-theme" style="background: #ddd; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Reset to Default</button>
+        <button id="export-theme" style="background: #ddd; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Export</button>
+        <button id="import-theme" style="background: #ddd; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Import</button>
+      </div>
+      <div id="theme-import-section" style="display: none; margin-top: 15px;">
+        <textarea id="theme-import-data" style="width: 100%; height: 100px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 8px;" placeholder="Paste theme JSON here..."></textarea>
+        <button id="confirm-import" style="background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Import Theme</button>
+      </div>
+    `;
+    
+    document.body.appendChild(panel);
+    this.customizerOpen = true;
+    
+    // Populate color controls
+    this.populateColorControls();
+    
+    // Setup event listeners
+    document.getElementById('close-customizer').addEventListener('click', () => this.closeCustomizer());
+    document.getElementById('apply-theme').addEventListener('click', () => {
+      this.saveCurrentTheme();
+      this.closeCustomizer();
+    });
+    document.getElementById('reset-theme').addEventListener('click', () => {
+      this.resetToDefault();
+      this.closeCustomizer();
+      setTimeout(() => this.openCustomizer(), 100); // Reopen with updated values
+    });
+    document.getElementById('export-theme').addEventListener('click', () => this.exportTheme());
+    document.getElementById('import-theme').addEventListener('click', () => {
+      document.getElementById('theme-import-section').style.display = 'block';
+    });
+    document.getElementById('confirm-import').addEventListener('click', () => this.importTheme());
+    
+    // Add search functionality
+    document.getElementById('color-search').addEventListener('input', (e) => {
+      this.filterColorControls(e.target.value);
+    });
+  }
+  
+  populateColorControls() {
+    const colorControls = document.getElementById('color-controls');
+    colorControls.innerHTML = '';
+    
+    // Group by element type/purpose for better organization
+    const groups = this.groupColors(this.colorMap);
+    
+    // Sort groups by name
+    const sortedGroups = Object.keys(groups).sort();
+    
+    // Show count of colors found
+    const countInfo = document.createElement('div');
+    countInfo.textContent = `Found ${Object.keys(this.colorMap).length} colors in ${sortedGroups.length} groups`;
+    countInfo.style.marginBottom = '15px';
+    countInfo.style.fontSize = '14px';
+    countInfo.style.color = '#666';
+    colorControls.appendChild(countInfo);
+    
+    // Add a container for the groups
+    const groupsContainer = document.createElement('div');
+    groupsContainer.id = 'color-groups';
+    colorControls.appendChild(groupsContainer);
+    
+    sortedGroups.forEach(groupName => {
+      const colorIds = groups[groupName];
+      
+      const groupDiv = document.createElement('div');
+      groupDiv.className = 'color-group';
+      groupDiv.style.marginBottom = '20px';
+      
+      // Create a collapsible header
+      const header = document.createElement('div');
+      header.className = 'group-header';
+      header.style.cssText = 'cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 5px; background: #f5f5f5; border-radius: 4px;';
+      
+      const groupTitle = document.createElement('h3');
+      groupTitle.textContent = this.formatGroupName(groupName) + ` (${colorIds.length})`;
+      groupTitle.style.fontSize = '16px';
+      groupTitle.style.margin = '5px 0';
+      
+      const toggleIcon = document.createElement('span');
+      toggleIcon.textContent = '−';
+      toggleIcon.style.fontWeight = 'bold';
+      
+      header.appendChild(groupTitle);
+      header.appendChild(toggleIcon);
+      groupDiv.appendChild(header);
+      
+      // Create container for color controls
+      const colorsContainer = document.createElement('div');
+      colorsContainer.className = 'colors-container';
+      colorsContainer.style.paddingLeft = '10px';
+      
+      // Fill with color options
+      colorIds.forEach(colorId => {
+        const colorInfo = this.colorMap[colorId];
+        if (!colorInfo) return;
+        
+        const colorOption = document.createElement('div');
+        colorOption.className = 'color-option';
+        colorOption.dataset.colorId = colorId;
+        colorOption.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px;';
+        
+        // Format display name
+        const displayName = this.formatDisplayName(colorInfo);
+        
+        colorOption.innerHTML = `
+          <div style="flex: 1; overflow: hidden;">
+            <div style="font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${colorInfo.selector} { ${colorInfo.property} }">
+              ${displayName}
+            </div>
+            <div style="font-size: 12px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${colorInfo.value}
+            </div>
+          </div>
+          <input type="color" data-color-id="${colorId}" value="${this.convertToHex(colorInfo.value)}"
+                 style="margin-left: 10px; cursor: pointer;">
+        `;
+        
+        colorsContainer.appendChild(colorOption);
+      });
+      
+      groupDiv.appendChild(colorsContainer);
+      groupsContainer.appendChild(groupDiv);
+      
+      // Add toggle functionality
+      header.addEventListener('click', () => {
+        if (colorsContainer.style.display === 'none') {
+          colorsContainer.style.display = 'block';
+          toggleIcon.textContent = '−';
+        } else {
+          colorsContainer.style.display = 'none';
+          toggleIcon.textContent = '+';
+        }
+      });
+    });
+    
+    // Add change event to color inputs
+    document.querySelectorAll('#color-controls input[type="color"]').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const colorId = e.target.dataset.colorId;
+        const newColor = e.target.value;
+        
+        // Update our theme object
+        if (this.currentTheme[colorId]) {
+          this.currentTheme[colorId].value = newColor;
+        } else {
+          this.currentTheme[colorId] = {
+            ...this.colorMap[colorId],
+            value: newColor
+          };
+        }
+        
+        // Apply the changes immediately
+        this.applyTheme(this.currentTheme);
+      });
+    });
+  }
+  
+  filterColorControls(searchText) {
+    const searchLower = searchText.toLowerCase();
+    const allOptions = document.querySelectorAll('.color-option');
+    const allGroups = document.querySelectorAll('.color-group');
+    
+    // If empty search, show all groups
+    if (!searchText) {
+      allGroups.forEach(group => {
+        group.style.display = 'block';
+        const colorsContainer = group.querySelector('.colors-container');
+        colorsContainer.style.display = 'block';
+        group.querySelectorAll('.color-option').forEach(option => {
+          option.style.display = 'flex';
+        });
+      });
+      return;
+    }
+    
+    // Hide all groups first
+    allGroups.forEach(group => {
+      group.style.display = 'none';
+    });
+    
+    // Show matching options and their groups
+    allOptions.forEach(option => {
+      const colorId = option.dataset.colorId;
+      const colorInfo = this.colorMap[colorId];
+      if (!colorInfo) return;
+      
+      const selector = colorInfo.selector.toLowerCase();
+      const property = colorInfo.property.toLowerCase();
+      const value = colorInfo.value.toLowerCase();
+      
+      if (selector.includes(searchLower) ||
+          property.includes(searchLower) ||
+          value.includes(searchLower)) {
+        option.style.display = 'flex';
+        // Show parent group
+        const group = option.closest('.color-group');
+        group.style.display = 'block';
+        const colorsContainer = group.querySelector('.colors-container');
+        colorsContainer.style.display = 'block';
+      } else {
+        option.style.display = 'none';
+      }
+    });
+  }
+  
+  groupColors(colorMap) {
+    const groups = {};
+    
+    Object.entries(colorMap).forEach(([colorId, colorInfo]) => {
+      const selector = colorInfo.selector;
+      
+      // Determine group based on selector
+      let groupName = 'other';
+      
+      // Extract meaningful parts from selector
+      if (selector.includes('body')) groupName = 'body';
+      else if (selector.includes('html')) groupName = 'html';
+      else if (selector.includes('a:')) groupName = 'links';
+      else if (selector.includes('a ') || selector === 'a') groupName = 'links';
+      else if (selector.includes('button') || selector.includes('.btn')) groupName = 'buttons';
+      else if (selector.includes('input') || selector.includes('select') ||
+               selector.includes('textarea')) groupName = 'form-elements';
+      else if (selector.includes('h1') || selector.includes('h2') ||
+               selector.includes('h3') || selector.includes('h4')) groupName = 'headings';
+      else if (selector.includes('header')) groupName = 'header';
+      else if (selector.includes('footer')) groupName = 'footer';
+      else if (selector.includes('nav')) groupName = 'navigation';
+      else if (selector.includes('table')) groupName = 'tables';
+      else if (selector.includes('.bg-') || colorInfo.property.includes('background')) groupName = 'backgrounds';
+      else if (colorInfo.property === 'color') groupName = 'text-colors';
+      else if (colorInfo.property.includes('border')) groupName = 'borders';
+      else {
+        // Extract class or id name if possible
+        const match = selector.match(/\.([a-zA-Z0-9_-]+)/) || selector.match(/#([a-zA-Z0-9_-]+)/);
+        if (match) {
+          groupName = match[1];
+        } else {
+          // Use the selector tag if it's a simple tag
+          const tagMatch = selector.match(/^([a-zA-Z0-9]+)$/);
+          if (tagMatch) {
+            groupName = tagMatch[1];
+          }
+        }
+      }
+      
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(colorId);
+    });
+    
+    return groups;
+  }
+
+  formatGroupName(name) {
+    // Convert from kebab-case or snake_case to Title Case
+    return name
+      .replace(/-|_/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  formatDisplayName(colorInfo) {
+    const { selector, property } = colorInfo;
+    
+    // For simple selectors, show the full selector
+    if (selector.length < 30) {
+      return `${selector} → ${property}`;
+    }
+    
+    // For long selectors, truncate
+    return `${selector.substring(0, 25)}... → ${property}`;
+  }
+
+  convertToHex(color) {
+    // Handle empty values
+    if (!color) return '#000000';
+    
+    // If already hex, return it
+    if (color.startsWith('#')) return color;
+    
+    // For rgb/rgba colors
+    if (color.startsWith('rgb')) {
+      const rgbValues = color.match(/\d+/g);
+      if (!rgbValues || rgbValues.length < 3) return '#000000';
+      
+      const r = parseInt(rgbValues[0]);
+      const g = parseInt(rgbValues[1]);
+      const b = parseInt(rgbValues[2]);
+      
+      return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+    }
+    
+    // For named colors, create a temporary element to convert
+    try {
+      const temp = document.createElement('div');
+      temp.style.color = color;
+      document.body.appendChild(temp);
+      const computedColor = getComputedStyle(temp).color;
+      document.body.removeChild(temp);
+      
+      // Now convert the computed rgb color
+      return this.convertToHex(computedColor);
+    } catch (e) {
+      console.warn('Could not convert color:', color);
+      return '#000000';
+    }
+  }
+
+  closeCustomizer() {
+    const panel = document.getElementById('theme-customizer-panel');
+    if (panel) {
+      panel.remove();
+    }
+    this.customizerOpen = false;
+  }
+
+  exportTheme() {
+    // Create a cleaned version of the theme for export
+    const exportTheme = {};
+    Object.entries(this.currentTheme).forEach(([id, colorInfo]) => {
+      if (colorInfo && colorInfo.value !== this.defaultColors[id]?.value) {
+        exportTheme[id] = colorInfo;
+      }
+    });
+    
+    const themeString = JSON.stringify(exportTheme, null, 2);
+    
+    // Create a hidden textarea for copying
+    const textarea = document.createElement('textarea');
+    textarea.value = themeString;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = 0;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    
+    alert('Theme JSON copied to clipboard!');
+    
+    // Also offer download
+    const blob = new Blob([themeString], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'koboldai-theme.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  importTheme() {
+    const textarea = document.getElementById('theme-import-data');
+    try {
+      const importedTheme = JSON.parse(textarea.value);
+      
+      // Merge imported theme with default theme
+      const newTheme = JSON.parse(JSON.stringify(this.defaultColors));
+      
+      // Apply imported colors over defaults
+      Object.entries(importedTheme).forEach(([id, colorInfo]) => {
+        if (newTheme[id]) {
+          newTheme[id].value = colorInfo.value;
+        } else {
+          newTheme[id] = colorInfo;
+        }
+      });
+      
+      this.applyTheme(newTheme);
+      this.saveCurrentTheme();
+      this.closeCustomizer();
+      setTimeout(() => this.openCustomizer(), 100); // Reopen with updated values
+    } catch (e) {
+      alert('Invalid theme data. Please check the format and try again.');
+      console.error('Error importing theme:', e);
+    }
+  }
+}
+
+// Initialize the theme customizer when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+  const customizer = new ThemeCustomizer();
+  customizer.init();
+});
+
+// If the page is already loaded, initialize immediately
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  const customizer = new ThemeCustomizer();
+  customizer.init();
+}
+
+
 	if (localflag)
 	{
 		let inputport = urlParams.get('port');
