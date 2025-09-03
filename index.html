@@ -19,7 +19,7 @@ Current version indicated by LITEVER below.
 </script>
 
 <head>
-	<title>KoboldAI Lite</title>
+	<title>KoboldAI RP-Lite EXPERIMENTAL with known bugs</title>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -25888,11 +25888,11 @@ function toggle_opmode() {
 		<div class="popupbg flex"></div>
 		<div class="nspopup flexsize higher">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Welcome To KoboldAI Lite</div>
+				<div class="popuptitletext">Welcome To KoboldAI RP-Lite - this is a prototype implementation!!!<br>This means rp-lite can be: UNSTABLE / UNRELIABLE / HAVE BUGS</div>
 			</div>
 			<div class="menutext">
 				<div style="padding-bottom: 6px;">
-					Welcome to KoboldAI Lite!<br>Pick a UI Style to get started. You can always change it later in the Settings menu.
+					Welcome to KoboldAI RP-Lite!<br>Pick a UI Style to get started. You can always change it later in the Settings menu.<br>WARNING: this is a prototype implementation do not rely on this, it's subject to change and bugs are known.
 				</div>
 				<div class="welcome-theme-selector">
 					<div class="welcome-theme-option">
@@ -25980,6 +25980,9 @@ function toggle_opmode() {
 							<a class="nav-link mainnav" href="#" onclick="leave_multiplayer()">Exit Multiplayer</a>
 						</li>
 					</ul>
+					<div style="color:orange;font-weight: bold; text-align: center !important;">
+						<b>WARNING:</b><br>EXPERIMENTAL, do not rely your data and chat on this!!!
+					</div>
 				</div>
 
 			</div>
@@ -33954,6 +33957,9 @@ function toggle_opmode() {
                                         <li class="nav-item hidden" id="rp-topbtn_multiplayer_leave"><a class="nav-link mainnav" href="#" onclick="closeRPTopNav();leave_multiplayer();return false;">Exit Multiplayer</a></li>
                                     </ul>
                                 </div>
+								<div style="color:orange;font-weight: bold; text-align: center !important;">
+									<b>WARNING:</b><br>EXPERIMENTAL, do not rely your data and chat on this!!!
+								</div>
                                 <div id="rpmod-connectstatus" style="margin-left:auto;color:#cccccc;font-weight:bold;">&nbsp;</div>
                             </div>`;
                         topContent.appendChild(rpbar);
